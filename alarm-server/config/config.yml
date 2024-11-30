@@ -1,0 +1,17 @@
+# 서버 설정
+server:
+  port: 8080  # 서버가 실행될 포트
+
+# Redis 설정
+redis:
+  host: "redis-server"     # Docker Compose의 Redis 컨테이너 이름
+  port: 6379               # Redis 포트 번호
+  password: ""             # 비밀번호
+
+# MySQL 설정
+mysql:
+  host: "mysql-server"     # Docker Compose의 MySQL 컨테이너 이름
+  port: 3306               # MySQL 포트 번호
+  user: "root"             # 사용자명
+  password: "password"     # 비밀번호
+  database: "push_notification_db"  # 데이터베이스 이름

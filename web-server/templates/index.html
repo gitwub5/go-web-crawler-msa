@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>공지사항</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        section { margin-bottom: 30px; }
+        ul { list-style-type: none; padding: 0; }
+        li { background: #f4f4f4; margin: 5px 0; padding: 10px; border-radius: 5px; }
+        a { text-decoration: none; color: #007BFF; }
+        a:hover { text-decoration: underline; }
+        .notice-title { font-weight: bold; }
+        .notice-date { font-size: 0.9em; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>실시간 공지사항</h1>
+    <section>
+        <h2>컴퓨터공학과 공지사항 (CSE)</h2>
+        <ul id="cse-notice-list">
+            <!-- CSE 공지사항이 여기에 추가됩니다 -->
+        </ul>
+    </section>
+    <section>
+        <h2>소프트웨어중심대학 공지사항 (SW)</h2>
+        <ul id="sw-notice-list">
+            <!-- SW 공지사항이 여기에 추가됩니다 -->
+        </ul>
+    </section>
+    <script>
+        // 공지를 HTML로 변환하는 함수
+        function createNoticeHTML(noticeString) {
+            const [number, title, date, link] = noticeString.split('|'); // 데이터 분리
+
+            // li 요소 생성
+            const li = document.createElement('li');
+
+            // 링크 요소 생성
+            const anchor = document.createElement('a');
+            anchor.href = link;
+            anchor.target = '_blank'; // 새 탭에서 열리도록 설정
+            anchor.innerHTML = `
+                <span class="notice-title">${title}</span><br>
+                <span class="notice-date">작성일: ${date}</span>
+            `;
+
+            li.appendChild(anchor);
+            return li;
+        }
+
+        // 주기적으로 새로운 공지사항 가져오기
+        setInterval(() => {
+            fetch('/api/notices')
+                .then(response => response.json())
+                .then(data => {
+                    // CSE 공지사항 업데이트
+                    const cseList = document.getElementById('cse-notice-list');
+                    cseList.innerHTML = ''; // 기존 항목 제거
+                    if (data.cseNotices) {
+                        data.cseNotices.forEach(notice => {
+                            const li = createNoticeHTML(notice);
+                            cseList.appendChild(li);
+                        });
+                    }
+
+                    // SW 공지사항 업데이트
+                    const swList = document.getElementById('sw-notice-list');
+                    swList.innerHTML = ''; // 기존 항목 제거
+                    if (data.swNotices) {
+                        data.swNotices.forEach(notice => {
+                            const li = createNoticeHTML(notice);
+                            swList.appendChild(li);
+                        });
+                    }
+                });
+        }, 5000); // 5초마다 업데이트
+    </script>
+</body>
+</html>
