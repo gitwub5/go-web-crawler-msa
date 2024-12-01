@@ -27,11 +27,20 @@ func GetQueueNames() []string {
 	return strings.Split(queues, ",")
 }
 
-// GetPort는 서버 실행 포트를 반환합니다.
+// GetPort는 웹 서버 실행 포트를 반환합니다.
 func GetPort() string {
-	port := os.Getenv("PORT")
+	port := os.Getenv("WEB_SERVER_PORT")
 	if port == "" {
-		port = "8080" // 기본 포트
+		port = "8000" // 기본 포트를 8000으로 변경
 	}
 	return port
+}
+
+// GetCrawlerServerURL는 크롤러 서버 URL을 반환합니다.
+func GetCrawlerServerURL() string {
+	url := os.Getenv("CRAWLER_SERVER_URL")
+	if url == "" {
+		url = "http://localhost:8080" // 기본 크롤러 서버 URL
+	}
+	return url
 }
