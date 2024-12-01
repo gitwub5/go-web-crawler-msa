@@ -1,0 +1,101 @@
+services:
+  web-server:
+    image: golang:1.23.1
+    working_dir: /app
+    ports:
+      - "8000:8000" # 웹 서버 포트
+    environment:
+      GIN_MODE: release
+      WEB_SERVER_PORT: 8000
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      CRAWLER_SERVER_URL: "http://crawler-server:8080"
+      QUEUE_NAMES: "cse-notices,sw-notices"
+    volumes:
+      - ./web-server:/app
+    command: >
+      sh -c "
+        go mod tidy &&
+        go run main.go"
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      crawler-server:
+        condition: service_started
+    networks:
+      - app_network
+
+  crawler-server:
+    image: golang:1.23.1
+    working_dir: /app
+    ports:
+      - "8080:8080" # 크롤러 서버 포트
+    environment:
+      CRAWLER_SERVER_PORT: 8080
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_USER: mydb
+      MYSQL_PASSWORD: securepassword
+      MYSQL_DATABASE: mydb
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+    volumes:
+      - ./crawler-server:/app
+    command: >
+      sh -c "
+        go mod tidy &&
+        go run main.go"
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app_network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  db:
+    image: mysql:8.1
+    container_name: db
+    ports:
+      - "13306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: securepassword
+      MYSQL_DATABASE: mydb
+      MYSQL_USER: mydb
+      MYSQL_PASSWORD: securepassword
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./_tools/mysql/conf.d:/etc/mysql/conf.d:cached
+      - ./_tools/mysql/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    restart: always
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+volumes:
+  mysql_data:
+
+networks:
+  app_network:
