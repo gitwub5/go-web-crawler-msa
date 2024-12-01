@@ -27,8 +27,12 @@ make up
 
 |method|URL|기능|
 |------|---|---|
-|GET|localhost:5000/cse|컴퓨터공학과 공지사항 수동 크롤링|
-|GET|localhost:5000/sw|소프트웨어중심대학사업단 공지사항 수동 크롤링|
+|GET|localhost:5000/crawling/cse|컴퓨터공학과 공지사항 수동 크롤링|
+|GET|localhost:5000/crawling/sw|소프트웨어중심대학사업단 공지사항 수동 크롤링|
+|GET|localhost:5000/notices/cse_notices|현재 DB에 저장된 컴퓨터공학과 크롤링 내용|
+|GET|localhost:5000/notices/sw_notices|현재 DB에 저장된 소프트웨어중심대학사업단 크롤링 내용|
+|DELETE|localhost:5000/notices/cse_notices|DB에 저장된 컴퓨터공학과 내용 삭제|
+|DELETE|localhost:5000/notices/sw_notices|DB에 저장된 소프트웨어중심대학사업단 내용 삭제|
 
 실행 종료 시
 

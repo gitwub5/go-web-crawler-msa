@@ -2,92 +2,96 @@ package main
 
 import (
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/JinHyeokOh01/go-crwl-server/config"
 	"github.com/JinHyeokOh01/go-crwl-server/controllers"
-	"github.com/JinHyeokOh01/go-crwl-server/models"
-	"github.com/JinHyeokOh01/go-crwl-server/rabbitmq"
+	"github.com/JinHyeokOh01/go-crwl-server/repository"
 	"github.com/JinHyeokOh01/go-crwl-server/services"
-	"github.com/JinHyeokOh01/go-crwl-server/utils"
+	"github.com/JinHyeokOh01/go-crwl-server/services/rabbitmq"
+	"github.com/JinHyeokOh01/go-crwl-server/store"
 
 	"github.com/gin-gonic/gin"
 )
 
-func startPeriodicCrawling() {
-	// 각 공지사항의 기존 데이터 저장을 위한 슬라이스
-	existingCSENotices := []models.Notice{}
-	existingSWNotices := []models.Notice{}
+func startPeriodicCrawling(crawlingService services.CrawlingService) {
+	ticker := time.NewTicker(1 * time.Minute) // 30분마다 실행
+	defer ticker.Stop()
 
-	var executeCrawling func()
-	executeCrawling = func() {
-		// CSE 공지사항 크롤링 및 발행
-		updatedCSE := handleCrawlingAndPublish("cse-notices", services.GetCSECrawlingData, existingCSENotices)
-		existingCSENotices = updatedCSE
+	for range ticker.C {
+		log.Println("주기적 크롤링 시작")
 
-		// SW 공지사항 크롤링 및 발행
-		updatedSW := handleCrawlingAndPublish("sw-notices", services.GetSWCrawlingData, existingSWNotices)
-		existingSWNotices = updatedSW
-
-		// 다음 크롤링 예약
-		time.AfterFunc(1*time.Minute, executeCrawling)
-	}
-
-	// 첫 번째 크롤링 시작
-	executeCrawling()
-}
-
-// handleCrawlingAndPublish는 크롤링 데이터를 가져오고 RabbitMQ에 발행하며, 중복 제거된 공지사항을 반환합니다.
-func handleCrawlingAndPublish(queueName string, crawlingFunc func() ([]models.Notice, error), existing []models.Notice) []models.Notice {
-	notices, err := crawlingFunc()
-	if err != nil {
-		log.Printf("[%s] 크롤링 실패: %v", queueName, err)
-		return existing
-	}
-
-	// 중복 제거
-	uniqueNotices := utils.RemoveDuplicateNotices(notices, existing)
-
-	// 새로운 공지사항이 있을 경우에만 로그 출력
-	if len(uniqueNotices) > 0 {
-		log.Printf("[%s] 새로운 공지사항 %d개 발견", queueName, len(uniqueNotices))
-	} else {
-		log.Printf("[%s] 새로운 공지사항이 없습니다", queueName)
-	}
-
-	// RabbitMQ 발행
-	for _, notice := range uniqueNotices {
-		message := utils.FormatNoticeMessage(notice)
-		err := rabbitmq.PublishMessage(queueName, message)
+		// CSE 공지사항 크롤링 및 저장
+		_, err := crawlingService.HandleCSECrawling()
 		if err != nil {
-			log.Printf("[%s] RabbitMQ 발행 실패: %v", queueName, err)
-		} else {
-			log.Printf("[%s] RabbitMQ 발행 성공: %s", queueName, message)
+			log.Printf("CSE 공지사항 크롤링 중 오류 발생: %v", err)
 		}
-	}
 
-	// 기존 공지사항 목록을 최신화
-	return append(existing, uniqueNotices...)
+		// SW 공지사항 크롤링 및 저장
+		_, err = crawlingService.HandleSWCrawling()
+		if err != nil {
+			log.Printf("SW 공지사항 크롤링 중 오류 발생: %v", err)
+		}
+
+		log.Println("주기적 크롤링 완료")
+	}
 }
 
 func main() {
 	// 환경 변수 로드
 	config.LoadEnv()
 
-	port := config.GetPort() // 환경 변수에서 포트 가져오기
-	log.Printf("크롤링 서버 실행 중: http://localhost:%s", port)
+	// 데이터베이스 초기화
+	dbConfig := config.GetDBConfig()
+	if err := store.Initialize(dbConfig); err != nil {
+		log.Fatalf("데이터베이스 초기화 실패: %v", err)
+	}
+	defer store.Close()
+
+	// RabbitMQ 초기화
+	rabbitMQURL := config.GetRabbitMQURL()
+	if err := rabbitmq.InitializeRabbitMQ(rabbitMQURL); err != nil {
+		log.Fatalf("RabbitMQ 초기화 실패: %v", err)
+	}
+	defer rabbitmq.CloseRabbitMQ()
+
+	// 애플리케이션 종료 시그널 처리
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	// 레포지토리 및 서비스 생성
+	repo := repository.NewNoticeRepository()
+	noticeService := services.NewNoticeService(repo)
+	crawlingService := services.NewCrawlingService(repo)
+
+	// Controller 생성
+	noticeController := controllers.NewNoticeController(noticeService)
+	crwlController := controllers.NewCrwlController(crawlingService)
 
 	// Gin 서버 설정
 	r := gin.Default()
 
-	// CSE 공지사항 엔드포인트 연결
-	r.GET("/cse", controllers.GetCSENoticesHandler)
-	// SW 공지사항 엔드포인트 연결
-	r.GET("/sw", controllers.GetSWNoticesHandler)
+	// API 라우팅 설정
+	r.GET("/crawling/cse", crwlController.HandleCSECrawling)
+	r.GET("/crawling/sw", crwlController.HandleSWCrawling)
+	r.GET("/notices/:tableName", noticeController.GetNotices)
+	r.DELETE("/notices/:tableName", noticeController.DeleteAllNotices)
 
 	// 주기적 크롤링 시작
-	go startPeriodicCrawling()
+	go startPeriodicCrawling(crawlingService)
 
 	// 서버 실행
-	r.Run(":" + port)
+	go func() {
+		log.Println("API 서버 실행 중...")
+		if err := r.Run(":" + config.GetPort()); err != nil {
+			log.Fatalf("서버 실행 중 오류 발생: %v", err)
+		}
+	}()
+
+	// 종료 신호 처리
+	<-sigs
+	log.Println("애플리케이션 종료 중...")
 }

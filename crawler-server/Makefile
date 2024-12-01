@@ -3,7 +3,7 @@
 
 DOCKER_TAG := latest
 build: ## Build docker image to deploy
-	docker build -t budougumi0617/gotodo:${DOCKER_TAG} \
+	docker build -t gitwub5/crwl-server:${DOCKER_TAG} \
 		--target deploy ./
 
 build-local: ## Build docker image to local development
@@ -23,6 +23,12 @@ ps: ## Check container status
 
 test: ## Execute tests
 	go test -race -shuffle=on ./...
+
+dry-migrate: ## Try migration
+	mysqldef -u mydb -p mydb -h 127.0.0.1 -P 3306 mydb --dry-run < ./_tools/mysql/schema.sql
+
+migrate:  ## Execute migration
+	mysqldef -u mydb -p mydb -h 127.0.0.1 -P 3306 mydb < ./_tools/mysql/schema.sql
 
 SHELL := /bin/bash
 generate: ## Generate codes

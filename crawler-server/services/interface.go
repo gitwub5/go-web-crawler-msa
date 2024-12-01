@@ -2,13 +2,25 @@ package services
 
 import "github.com/JinHyeokOh01/go-crwl-server/models"
 
-// GetCSECrawlingData는 컴퓨터공학과 공지사항을 크롤링하여 데이터를 반환합니다.
-func GetCSECrawlingData() ([]models.Notice, error) {
-	return CrwlCSENotices(cseURL)
+// NoticeService 인터페이스: 공지사항 관련 비즈니스 로직을 정의합니다.
+type NoticeService interface {
+	GetAllNotices(tableName string) ([]models.Notice, error)
+	CreateBatchNotices(tableName string, notices []models.Notice) error
+	DeleteBatchNotices(tableName string, notices []models.Notice) error
+	DeleteAllNotices(tableName string) error
 }
 
-// GetSWCrawlingData는 소프트웨어중심대학사업단 공지사항을 크롤링하여 데이터를 반환합니다.
-func GetSWCrawlingData() ([]models.Notice, error) {
-	swUrl := "https://swedu.khu.ac.kr/bbs/board.php?bo_table=07_01"
-	return CrwlSWNotices(swUrl)
+// CrawlingService 인터페이스: 크롤링 관련 비즈니스 로직을 정의합니다.
+type CrawlingService interface {
+	HandleCSECrawling() ([]models.Notice, error) // CSE 공지사항 크롤링 및 처리
+	HandleSWCrawling() ([]models.Notice, error)  // SW 공지사항 크롤링 및 처리
+}
+
+// NoticeRepository 인터페이스: 공지사항 관련 데이터 접근 계층을 정의합니다.
+type NoticeRepository interface {
+	GetAllNotices(tableName string) ([]models.Notice, error)
+	CreateBatchNotices(tableName string, notices []models.Notice) error
+	DeleteBatchNotices(tableName string, notices []models.Notice) error
+	DeleteAllNotices(tableName string) error
+	GetLatestNotice(tableName string) (models.Notice, error)
 }
