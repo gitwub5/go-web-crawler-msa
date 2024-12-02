@@ -10,6 +10,7 @@ services:
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
       CRAWLER_SERVER_URL: "http://crawler-server:8080"
       QUEUE_NAMES: "cse-notices,sw-notices"
+      TZ: "Asia/Seoul" # 한국 시간대 설정
     volumes:
       - ./web-server:/app
     command: >
@@ -38,6 +39,7 @@ services:
       MYSQL_PASSWORD: securepassword
       MYSQL_DATABASE: mydb
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      TZ: "Asia/Seoul" # 한국 시간대 설정
     volumes:
       - ./crawler-server:/app
     command: >
@@ -62,6 +64,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+      TZ: "Asia/Seoul" # 한국 시간대 설정
     healthcheck:
       test: ["CMD", "rabbitmqctl", "status"]
       interval: 10s
@@ -80,6 +83,7 @@ services:
       MYSQL_DATABASE: mydb
       MYSQL_USER: mydb
       MYSQL_PASSWORD: securepassword
+      TZ: "Asia/Seoul" # 한국 시간대 설정
     volumes:
       - mysql_data:/var/lib/mysql
       - ./_tools/mysql/conf.d:/etc/mysql/conf.d:cached
