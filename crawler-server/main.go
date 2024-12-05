@@ -18,7 +18,8 @@ import (
 )
 
 func startPeriodicCrawling(crawlingService services.CrawlingService) {
-	ticker := time.NewTicker(1 * time.Minute) // 30분마다 실행
+	// ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
