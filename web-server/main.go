@@ -36,6 +36,10 @@ var (
 	noticesMutex      = &sync.Mutex{}
 )
 
+// SSE 클라이언트 관리
+var clients = make(map[chan string]struct{})
+var clientsMutex = &sync.Mutex{}
+
 func main() {
 	// 환경 변수 로드
 	config.LoadEnv()
@@ -58,8 +62,16 @@ func main() {
 	r := gin.Default()
 	r.LoadHTMLGlob("templates/*") // HTML 템플릿 경로 설정
 
+	// SSE 엔드포인트
+	r.GET("/sse", sseHandler)
+
 	// 메인 페이지 렌더링
 	r.GET("/", func(c *gin.Context) {
+		err := fetchNoticesFromCrawler()
+		if err != nil {
+			log.Printf("데이터 갱신 중 오류 발생: %v", err)
+		}
+
 		noticesMutex.Lock()
 		defer noticesMutex.Unlock()
 		notificationMutex.Lock()
@@ -88,12 +100,6 @@ func main() {
 		notificationQueue = []string{}
 	})
 
-	// 초기 데이터 로드
-	err := fetchNoticesFromCrawler()
-	if err != nil {
-		log.Printf("초기 데이터 로드 중 오류 발생: %v", err)
-	}
-
 	// 서버 실행
 	port := config.GetPort()
 	log.Printf("웹 서버 실행 중: http://localhost:%s", port)
@@ -105,10 +111,46 @@ func handleRabbitMQMessages() {
 	for msg := range rabbitmq.NoticeChannel {
 		log.Printf("RabbitMQ 메시지 수신: %s", msg)
 
-		// 메시지를 알림 큐에 추가
+		// 알림 큐에 메시지 추가
 		notificationMutex.Lock()
 		notificationQueue = append(notificationQueue, msg)
 		notificationMutex.Unlock()
+
+		// SSE 클라이언트에 메시지 전송
+		clientsMutex.Lock()
+		for clientChan := range clients {
+			clientChan <- msg
+		}
+		clientsMutex.Unlock()
+	}
+}
+
+// sseHandler handles SSE requests
+func sseHandler(c *gin.Context) {
+	clientChan := make(chan string)
+
+	// 클라이언트 등록
+	clientsMutex.Lock()
+	clients[clientChan] = struct{}{}
+	clientsMutex.Unlock()
+
+	// 클라이언트 연결 종료 시 처리
+	defer func() {
+		clientsMutex.Lock()
+		delete(clients, clientChan)
+		close(clientChan)
+		clientsMutex.Unlock()
+	}()
+
+	// SSE 헤더 설정
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+
+	// 메시지 스트림 전송
+	for msg := range clientChan {
+		fmt.Fprintf(c.Writer, "data: %s\n\n", msg)
+		c.Writer.Flush()
 	}
 }
 
